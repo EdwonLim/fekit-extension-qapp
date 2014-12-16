@@ -78,6 +78,8 @@ exports.usage = "QApp工具";
 exports.set_options = function(optimist) {
     optimist.alias('w', 'widget');
     optimist.describe('w', '安装组件');
+    optimist.alias('r', 'remote');
+    optimist.describe('r', '源地址');
     return optimist;
 };
 
@@ -85,6 +87,10 @@ exports.run = function(options) {
     var root = options.cwd;
 
     options.widget = options.w;
+
+    if (options.r && options.r !== true) {
+        BASE_URL = options.r;
+    }
 
     if (options.widget) {
         var widgets = [];
