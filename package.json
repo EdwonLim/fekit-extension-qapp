@@ -1,0 +1,23 @@
+{
+    "fekit_extension_command_name":"qapp",
+    "name": "fekit-extension-qapp",
+    "version": "0.0.1",
+    "description": "为fekit增加qapp命令",
+    "dependencies": {
+        "async": "0.9.0",
+        "request": "2.51.0",
+        "tar.gz": "0.1.0"
+    },
+    "main": "index.js",
+    "scripts": {},
+    "repository": {
+        "type": "git",
+        "url": "git@github.com:EdwonLim/fekit-extension-qapp.git"
+    },
+    "author": "Edwon.Lim <edwon.lim@gmail.com>",
+    "license": "BSD",
+    "scripts":{
+        "postinstall":"node ./scripts/postinstall.js",
+        "preuninstall":"node ./scripts/preuninstall.js"
+    }
+}
