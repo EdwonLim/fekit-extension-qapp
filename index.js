@@ -24,87 +24,142 @@ function deleteFolderRecursive(path) {
     }
 }
 
+function showList(type) {
+    return function(cb) {
+        var url = BASE_URL + type + 's/info.config';
+        c('- 获取列表 ...');
+        request(url, function(err, res, body) {
+            if (!err && res.statusCode === 200) {
+                var info = {};
+                try {
+                    info = JSON.parse(body);
+                } catch(e) {
+                    c(' * [ERROR]信息内容解析失败。');
+                }
+                if (info.list && info.list.length) {
+                    info.list.forEach(function(item) {
+                        c(item.name + '\t' + item.version + '\t' + item.description);
+                    });
+                }
+            } else {
+                c(' * [ERROR]获取列表信息失败。');
+            }
+            cb(null);
+        });
+    };
+}
+
 function installWidgets(widgets, root) {
-    var taskList = [];
 
-    if (!fs.existsSync(syspath.join(root, './tmp'))) {
-        fs.mkdirSync(syspath.join(root, './tmp'));
-    }
+    return function(cb) {
+        var taskList = [];
 
-    if (!fs.existsSync(syspath.join(root, './src/widgets'))) {
-        fs.mkdirSync(syspath.join(root, './src/widgets'));
-    }
+        if (!fs.existsSync(syspath.join(root, './tmp'))) {
+            fs.mkdirSync(syspath.join(root, './tmp'));
+        }
 
-    widgets.forEach(function(widget) {
-        taskList.push(function(callback) {
-            c(' * 开始下载 ' + widget.name + ' 组件包，版本 ' + widget.version + ' ...');
-            var url = BASE_URL + 'widgets/' + widget.name + '/build/' + widget.name + '-' + widget.version + '.map';
-            c(' * 下载地址: ' + url.replace('.map', '.tar.gz'));
-            request({
-                url: url,
-                encoding : null
-            }, function(err, res, body) {
-                c(' * 下载文件成功。');
-                fs.writeFileSync(syspath.join(root, './tmp/' + widget.name + '-' + widget.version + '.tar.gz'), body);
-                new targz().extract(
-                    syspath.join(root, './tmp/' + widget.name + '-' + widget.version + '.tar.gz'),
-                    syspath.join(root, './src/widgets/'),
-                    function(err) {
-                        if (err) {
-                            c(' * [ERROR]: ', err);
-                            c(' * 安装 ' + widget.name + ' 组件失败。');
-                        } else {
-                            if (fs.existsSync(syspath.join(root, './src/widgets/' + widget.name))) {
-                                deleteFolderRecursive(syspath.join(root, './src/widgets/' + widget.name));
+        if (!fs.existsSync(syspath.join(root, './src/widgets'))) {
+            fs.mkdirSync(syspath.join(root, './src/widgets'));
+        }
+
+        widgets.forEach(function(widget) {
+            taskList.push(function(callback) {
+                c(' * 开始下载 ' + widget.name + ' 组件包，版本 ' + widget.version + ' ...');
+                var url = BASE_URL + 'widgets/' + widget.name + '/build/' + widget.name + '-' + widget.version + '.map';
+                c(' * 下载地址: ' + url.replace('.map', '.tar.gz'));
+                request({
+                    url: url,
+                    encoding: null
+                }, function(err, res, body) {
+                    if (!err && res.statusCode === 200) {
+                        c(' * 下载文件成功。');
+                        fs.writeFileSync(syspath.join(root, './tmp/' + widget.name + '-' + widget.version + '.tar.gz'), body);
+                        new targz().extract(
+                            syspath.join(root, './tmp/' + widget.name + '-' + widget.version + '.tar.gz'),
+                            syspath.join(root, './src/widgets/'),
+                            function(err) {
+                                if (err) {
+                                    c(' * [ERROR]: ', err);
+                                    c(' * 安装 ' + widget.name + ' 组件失败。');
+                                } else {
+                                    if (fs.existsSync(syspath.join(root, './src/widgets/' + widget.name))) {
+                                        deleteFolderRecursive(syspath.join(root, './src/widgets/' + widget.name));
+                                    }
+                                    fs.renameSync(syspath.join(root, './src/widgets/src'), syspath.join(root, './src/widgets/' + widget.name));
+                                    c(' * 安装 ' + widget.name + ' 组件成功。');
+                                }
+                                callback(null);
                             }
-                            fs.renameSync(syspath.join(root, './src/widgets/src'), syspath.join(root, './src/widgets/' + widget.name));
-                            c(' * 安装 ' + widget.name + ' 组件成功。');
-                        }
+                        );
+                    } else {
+                        c(' * 下载文件失败。');
+                        c(' * 安装 ' + widget.name + ' 组件失败。');
                         callback(null);
                     }
-                );
+                });
             });
         });
-    });
 
-    async.series(taskList, function(err, results) {
-        deleteFolderRecursive(syspath.join(root, './tmp'));
-        console.log(' * 全部组件安装完成！');
-    });
+        c('- 开始安装 QApp 组件: ');
+        async.series(taskList, function(err, results) {
+            deleteFolderRecursive(syspath.join(root, './tmp'));
+            console.log(' * 全部组件安装完成！');
+            cb(null);
+        });
+    };
 }
 
 exports.usage = "QApp工具";
 
 exports.set_options = function(optimist) {
+    optimist.alias('l', 'list');
+    optimist.describe('l', '查看列表，值可以为 widget 或 plugin');
+    optimist.alias('r', 'remote');
+    optimist.describe('r', '源地址，默认: http://ued.qunar.com/qapp-source/');
     optimist.alias('w', 'widget');
     optimist.describe('w', '安装组件');
-    optimist.alias('r', 'remote');
-    optimist.describe('r', '源地址');
     return optimist;
 };
 
 exports.run = function(options) {
-    var root = options.cwd;
+    var root = options.cwd,
+        taskList = [];
 
+    options.list = options.l;
+    options.remote = options.r;
     options.widget = options.w;
 
-    if (options.r && options.r !== true) {
-        BASE_URL = options.r;
+    var config = {};
+    try {
+        config = JSON.parse(fs.readFileSync(syspath.join(root, 'fekit.config')));
+    } catch (e) {
+        c(' * [ERROR]读取 fekit.config 失败。');
+        return;
+    }
+
+    c('- 检测 QApp 环境:');
+    if (config.dependencies && config.dependencies.QApp) {
+        c(' * 当前使用 QApp 版本为: ' + config.dependencies.QApp);
+    } else {
+        c(' * [ERROR]没有引入 QApp 模块。');
+    }
+
+    c('-------------------------');
+
+    if (options.remote && options.remote !== true) {
+        BASE_URL = options.remote;
+    }
+
+    if (options.list) {
+        if (options.list == 'widget') {
+            taskList.push(showList('widget'));
+        }
     }
 
     if (options.widget) {
         var widgets = [];
-        c('- 开始安装 QApp 组件: ');
         if (options.widget === true) {
-            var config = {},
-                widgetConfig;
-            try {
-                config = JSON.parse(fs.readFileSync(syspath.join(root, 'fekit.config')));
-            } catch (e) {
-                c(' * [ERROR]读取 fekit.config 失败。');
-                return;
-            }
-            widgetConfig = config.module_options && config.module_options['QApp-widget'];
+            var widgetConfig = config.module_options && config.module_options['QApp-widget'];
             if (widgetConfig) {
                 for (var key in widgetConfig) {
                     widgets.push({
@@ -124,7 +179,12 @@ exports.run = function(options) {
                 version: nv[1]
             });
         }
-        installWidgets(widgets, root);
+        taskList.push(installWidgets(widgets, root));
     }
+
+    async.series(taskList, function(err, results) {
+        c('-------------------------');
+        c('- Love & Enjoy it!');
+    });
 
 };
