@@ -188,19 +188,92 @@ function installWidgets(widgets, root) {
     };
 }
 
+function showYoInfo(root) {
+    return function(cb) {
+        c('');
+        c('- 显示 Yo 信息 ...');
+        var config = {};
+        try {
+            config = JSON.parse(fs.readFileSync(syspath.join(root, 'src', 'yo', 'yo.config')));
+            c(' * 版本: ' + (config.version || '未知'));
+            c(' * 更新时间: ' + (config.update_time || '未知'));
+            cb(null);
+        } catch(e) {
+            c(' * [ERROR]读取解析组件信息失败！');
+            cb(c);
+        }
+    };
+}
+
+function installYo(version, root) {
+    return function(cb) {
+        c('- 开始安装 Yo: ');
+        c(' * 开始下载 Yo 源码包，版本 ' + version + ' ...');
+        var url = BASE_URL + 'yo/build/yo-' + version + '.map';
+        c(' * 下载地址: ' + url.replace('.map', '.tar.gz'));
+        request({
+            url: url,
+            encoding: null
+        }, function(err, res, body) {
+            if (!err && res.statusCode === 200) {
+                c(' * 下载文件成功。');
+                fs.writeFileSync(syspath.join(root, './tmp/yo-' + version + '.tar.gz'), body);
+                new targz().extract(
+                    syspath.join(root, './tmp/yo-' + version + '.tar.gz'),
+                    syspath.join(root, './tmp/yo/'),
+                    function(err) {
+                        if (err) {
+                            c(' * [ERROR]: ', err);
+                            c(' * [ERROR]安装 Yo 失败。');
+                        } else {
+                            if (!fs.existsSync(syspath.join(root, './src/yo'))) {
+                                fs.mkdirSync(syspath.join(root, './src/yo'));
+                            }
+                            if (fs.existsSync(syspath.join(root, './src/yo/font'))) {
+                                deleteFolderRecursive(syspath.join(root, './src/yo/font'));
+                            }
+                            if (fs.existsSync(syspath.join(root, './src/yo/lib'))) {
+                                deleteFolderRecursive(syspath.join(root, './src/yo/lib'));
+                            }
+                            fs.renameSync(syspath.join(root, './tmp/yo/src/yo.config'), syspath.join(root, './src/yo/yo.config'));
+                            fs.renameSync(syspath.join(root, './tmp/yo/src/font'), syspath.join(root, './src/yo/font'));
+                            fs.renameSync(syspath.join(root, './tmp/yo/src/lib'), syspath.join(root, './src/yo/lib'));
+                            c(' * 安装 Yo 成功。');
+                        }
+                        cb(null);
+                    }
+                );
+            } else {
+                c(' * 下载文件失败。');
+                c(' * 安装 Yo 失败。');
+                cb(null);
+            }
+        });
+    };
+}
+
 exports.usage = "QApp工具";
 
 exports.set_options = function(optimist) {
+
     optimist.alias('l', 'list');
     optimist.describe('l', '查看列表，参数现只可以为 "widget"');
+
     optimist.alias('i', 'info');
     optimist.describe('i', '查看信息, 参数格式为 "类型:名称"，例如: "widget:basic"');
+
     optimist.alias('r', 'remote');
     optimist.describe('r', '源地址，默认: http://ued.qunar.com/qapp-source/');
+
     optimist.alias('w', 'widget');
-    optimist.describe('w', '安装组件');
+    optimist.describe('w', '安装/更新组件');
+
     optimist.alias('u', 'update');
-    optimist.describe('u', '从本地升级QApp，参数为本地 QApp 源地址。（特殊情况下使用使用）');
+    optimist.describe('u', '从本地升级QApp，参数为本地 QApp 源地址（特殊情况下使用）');
+
+    optimist.alias('y', 'yo');
+    optimist.describe('y', '安装/更新Yo');
+
     return optimist;
 };
 
@@ -213,6 +286,7 @@ exports.run = function(options) {
     options.widget = options.w;
     options.update = options.u;
     options.info = options.i;
+    options.yo = options.y;
 
     var config = {};
     try {
@@ -278,13 +352,22 @@ exports.run = function(options) {
 
     if (options.info && options.info !== true) {
         var kv = options.info.split(':');
-        if (kv.length < 2) {
-            c(' * [ERROR]参数应为 type:name 形式。');
-            return;
-        }
         if (kv[0] === 'widget') {
+            if (kv.length < 2) {
+                c(' * [ERROR]参数应为 widget:组件名 形式。');
+                return;
+            }
             taskList.push(showWidgetInfo(kv[1], root));
+        } else if (kv[0] === 'yo') {
+            taskList.push(showYoInfo(root));
         }
+    }
+
+    if (options.yo) {
+        if (options.yo !== true) {
+            taskList.push(installYo(options.yo, root));
+        }
+        taskList.push(showYoInfo(root));
     }
 
     if (!fs.existsSync(syspath.join(root, './tmp'))) {
