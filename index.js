@@ -2,7 +2,9 @@ var fs = require('fs'),
     syspath = require('path'),
     request = require('request'),
     async = require('async'),
-    targz = require('tar.gz');
+    targz = require('tar.gz'),
+    cpr = require('cpr').cpr,
+    mkdirp = require('mkdirp');
 
 var BASE_URL = 'http://ued.qunar.com/qapp-source/';
 
@@ -33,7 +35,7 @@ function showList(type) {
                 var info = {};
                 try {
                     info = JSON.parse(body);
-                } catch(e) {
+                } catch (e) {
                     c(' * [ERROR]信息内容解析失败。');
                 }
                 if (info.list && info.list.length) {
@@ -49,14 +51,67 @@ function showList(type) {
     };
 }
 
+function installQAppModule(path, root) {
+    return function(cb) {
+        c('- 本地更新QApp ...');
+        fs.lstat(path, function(err, stat) {
+            if (err) {
+                c(' * [ERROR]文件或目录不存在。');
+                cb(null);
+            } else {
+                if (stat.isDirectory()) {
+                    cpr(path, syspath.join(root, './fekit_modules/QApp'), {
+                        deleteFirst: true
+                    }, function(err) {
+                        if (err) {
+                            c(' * [ERROR]文件复制失败。');
+                        } else {
+                            c(' * 文件复制成功。');
+                            c(' * 更新成功。');
+                        }
+                        cb(null);
+                    });
+                } else {
+                    if (~path.indexOf('.tar.gz')) {
+                        deleteFolderRecursive(syspath.join(root, './fekit_modules/QApp'));
+                        new targz().extract(
+                            path,
+                            syspath.join(root, './tmp/QApp'),
+                            function(err) {
+                                if (err) {
+                                    c(' * [ERROR]: ', err);
+                                    c(' * [ERROR]解压包失败。');
+                                    cb(null);
+                                } else {
+                                    c(' * 解压完毕。');
+                                    cpr(syspath.join(root, './tmp/QApp/qapp-framework'), syspath.join(root, './fekit_modules/QApp'), {
+                                        deleteFirst: true
+                                    }, function(err) {
+                                        if (err) {
+                                            c(' * [ERROR]文件复制失败。');
+                                        } else {
+                                            c(' * 文件复制成功。');
+                                            c(' * 更新成功。');
+                                        }
+                                        cb(null);
+                                    });
+                                }
+                            }
+                        );
+                    } else {
+                        c(' * [ERROR]请选择 tar.gz 文件。');
+                        cb(null);
+                    }
+                }
+            }
+        });
+    };
+}
+
 function installWidgets(widgets, root) {
 
     return function(cb) {
         var taskList = [];
-
-        if (!fs.existsSync(syspath.join(root, './tmp'))) {
-            fs.mkdirSync(syspath.join(root, './tmp'));
-        }
 
         if (!fs.existsSync(syspath.join(root, './src/widgets'))) {
             fs.mkdirSync(syspath.join(root, './src/widgets'));
@@ -80,7 +135,7 @@ function installWidgets(widgets, root) {
                             function(err) {
                                 if (err) {
                                     c(' * [ERROR]: ', err);
-                                    c(' * 安装 ' + widget.name + ' 组件失败。');
+                                    c(' * [ERROR]安装 ' + widget.name + ' 组件失败。');
                                 } else {
                                     if (fs.existsSync(syspath.join(root, './src/widgets/' + widget.name))) {
                                         deleteFolderRecursive(syspath.join(root, './src/widgets/' + widget.name));
@@ -102,8 +157,7 @@ function installWidgets(widgets, root) {
 
         c('- 开始安装 QApp 组件: ');
         async.series(taskList, function(err, results) {
-            deleteFolderRecursive(syspath.join(root, './tmp'));
-            console.log(' * 全部组件安装完成！');
+            c(' * 全部组件安装完成！');
             cb(null);
         });
     };
@@ -113,11 +167,13 @@ exports.usage = "QApp工具";
 
 exports.set_options = function(optimist) {
     optimist.alias('l', 'list');
-    optimist.describe('l', '查看列表，值可以为 widget 或 plugin');
+    optimist.describe('l', '查看列表，值现只可以为 widget');
     optimist.alias('r', 'remote');
     optimist.describe('r', '源地址，默认: http://ued.qunar.com/qapp-source/');
     optimist.alias('w', 'widget');
     optimist.describe('w', '安装组件');
+    optimist.alias('u', 'update');
+    optimist.describe('u', '从本地升级QApp，参数为本地 QApp 源地址。（测试使用）');
     return optimist;
 };
 
@@ -128,6 +184,7 @@ exports.run = function(options) {
     options.list = options.l;
     options.remote = options.r;
     options.widget = options.w;
+    options.update = options.u;
 
     var config = {};
     try {
@@ -148,6 +205,12 @@ exports.run = function(options) {
 
     if (options.remote && options.remote !== true) {
         BASE_URL = options.remote;
+    }
+
+    if (options.update) {
+        if (options.update !== true) {
+            taskList.push(installQAppModule(options.update, root));
+        }
     }
 
     if (options.list) {
@@ -182,7 +245,12 @@ exports.run = function(options) {
         taskList.push(installWidgets(widgets, root));
     }
 
+    if (!fs.existsSync(syspath.join(root, './tmp'))) {
+        fs.mkdirSync(syspath.join(root, './tmp'));
+    }
+
     async.series(taskList, function(err, results) {
+        deleteFolderRecursive(syspath.join(root, './tmp'));
         c('-------------------------');
         c('- Love & Enjoy it!');
     });
