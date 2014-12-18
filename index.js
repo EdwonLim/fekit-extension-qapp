@@ -293,7 +293,6 @@ exports.run = function(options) {
         config = JSON.parse(fs.readFileSync(syspath.join(root, 'fekit.config')));
     } catch (e) {
         c(' * [ERROR]读取 fekit.config 失败。');
-        return;
     }
 
     c('- 检测 QApp 环境:');
