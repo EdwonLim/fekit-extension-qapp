@@ -108,6 +108,31 @@ function installQAppModule(path, root) {
     };
 }
 
+function showWidgetInfo(name, root) {
+    return function(cb) {
+        c('');
+        c('- 显示' + name + '组件信息 ...');
+        var config = {};
+        try {
+            config = JSON.parse(fs.readFileSync(syspath.join(root, 'src', 'widgets', name, 'widget.config')));
+            c(' * 组件组名: ' + (config.name || ''));
+            c(' * 描述: ' + (config.description || '无'));
+            c(' * 版本: ' + (config.version || '未知'));
+            c(' * 输出: ');
+            config.exports.forEach(function(item, index) {
+                c('  * -- ' + (index + 1) + ' --');
+                c('  * 名称: ' + item.name + ' \t描述名: ' + (item.description || '无') + ' \t包含组件: ' + item.widgets.join(', '));
+                c('  * 脚本: ' + (item.script || '无') + ' \t样式: ' + (item.style || '无'));
+                c('  * 备注: ' + (item.mark || '无'));
+            });
+            cb(null);
+        } catch(e) {
+            c(' * [ERROR]读取解析组件信息失败！');
+            cb(c);
+        }
+    };
+}
+
 function installWidgets(widgets, root) {
 
     return function(cb) {
@@ -167,13 +192,15 @@ exports.usage = "QApp工具";
 
 exports.set_options = function(optimist) {
     optimist.alias('l', 'list');
-    optimist.describe('l', '查看列表，值现只可以为 widget');
+    optimist.describe('l', '查看列表，参数现只可以为 "widget"');
+    optimist.alias('i', 'info');
+    optimist.describe('i', '查看信息, 参数格式为 "类型:名称"，例如: "widget:basic"');
     optimist.alias('r', 'remote');
     optimist.describe('r', '源地址，默认: http://ued.qunar.com/qapp-source/');
     optimist.alias('w', 'widget');
     optimist.describe('w', '安装组件');
     optimist.alias('u', 'update');
-    optimist.describe('u', '从本地升级QApp，参数为本地 QApp 源地址。（测试使用）');
+    optimist.describe('u', '从本地升级QApp，参数为本地 QApp 源地址。（特殊情况下使用使用）');
     return optimist;
 };
 
@@ -185,6 +212,7 @@ exports.run = function(options) {
     options.remote = options.r;
     options.widget = options.w;
     options.update = options.u;
+    options.info = options.i;
 
     var config = {};
     try {
@@ -243,6 +271,20 @@ exports.run = function(options) {
             });
         }
         taskList.push(installWidgets(widgets, root));
+        widgets.forEach(function(widget) {
+            taskList.push(showWidgetInfo(widget.name, root));
+        });
+    }
+
+    if (options.info && options.info !== true) {
+        var kv = options.info.split(':');
+        if (kv.length < 2) {
+            c(' * [ERROR]参数应为 type:name 形式。');
+            return;
+        }
+        if (kv[0] === 'widget') {
+            taskList.push(showWidgetInfo(kv[1], root));
+        }
     }
 
     if (!fs.existsSync(syspath.join(root, './tmp'))) {
