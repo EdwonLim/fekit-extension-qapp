@@ -1,7 +1,7 @@
 {
     "fekit_extension_command_name":"qapp",
     "name": "fekit-extension-qapp",
-    "version": "0.0.7",
+    "version": "0.0.8",
     "description": "为fekit增加qapp命令",
     "dependencies": {
         "async": "0.9.0",

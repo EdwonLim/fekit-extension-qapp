@@ -230,6 +230,9 @@ function installYo(version, root) {
                             if (!fs.existsSync(syspath.join(root, './src/yo'))) {
                                 fs.mkdirSync(syspath.join(root, './src/yo'));
                             }
+                            if (fs.existsSync(syspath.join(root, './src/yo/yo.config'))) {
+                                fs.unlinkSync(syspath.join(root, './src/yo/yo.config'));
+                            }
                             if (fs.existsSync(syspath.join(root, './src/yo/font'))) {
                                 deleteFolderRecursive(syspath.join(root, './src/yo/font'));
                             }
