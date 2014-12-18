@@ -118,6 +118,7 @@ function showWidgetInfo(name, root) {
             c(' * 组件组名: ' + (config.name || ''));
             c(' * 描述: ' + (config.description || '无'));
             c(' * 版本: ' + (config.version || '未知'));
+            c(' * 更新时间: ' + (config.update_time || '未知'));
             c(' * 输出: ');
             config.exports.forEach(function(item, index) {
                 c('  * -- ' + (index + 1) + ' --');
