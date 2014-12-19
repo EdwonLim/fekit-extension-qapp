@@ -4,7 +4,8 @@ var fs = require('fs'),
     async = require('async'),
     targz = require('tar.gz'),
     cpr = require('cpr').cpr,
-    mkdirp = require('mkdirp');
+    mkdirp = require('mkdirp'),
+    spawn = require('child_process').spawn;
 
 var BASE_URL = 'http://ued.qunar.com/qapp-source/';
 
@@ -108,6 +109,21 @@ function installQAppModule(path, root) {
     };
 }
 
+function updateQAppModule(cb) {
+    var script = spawn('fekit', ['install', 'QApp']);
+    c('- Fekit 升级 QApp:');
+    script.stdout.on('data', function(chunk) {
+        var line = chunk + '';
+        line = line.replace('\n', '');
+        if (line.length) {
+            c(' * ' + line);
+        }
+    });
+    script.stdout.on('end', function(chunk) {
+        cb(null);
+    });
+}
+
 function showWidgetInfo(name, root) {
     return function(cb) {
         c('');
@@ -138,6 +154,10 @@ function installWidgets(widgets, root) {
 
     return function(cb) {
         var taskList = [];
+
+        if (!fs.existsSync(syspath.join(root, './src'))) {
+            fs.mkdirSync(syspath.join(root, './src'));
+        }
 
         if (!fs.existsSync(syspath.join(root, './src/widgets'))) {
             fs.mkdirSync(syspath.join(root, './src/widgets'));
@@ -315,6 +335,8 @@ exports.run = function(options) {
     if (options.update) {
         if (options.update !== true) {
             taskList.push(installQAppModule(options.update, root));
+        } else {
+            taskList.push(updateQAppModule);
         }
     }
 
