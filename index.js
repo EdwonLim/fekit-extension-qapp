@@ -5,6 +5,7 @@ var fs = require('fs'),
     async = require('async'),
     targz = require('tar.gz'),
     cpr = require('cpr').cpr,
+    colors = require('colors'),
     spawn = require('child_process').spawn;
 
 var BASE_URL = 'http://ued.qunar.com/qapp-source/';
@@ -53,7 +54,7 @@ function showList(config, type) {
                 try {
                     info = JSON.parse(body);
                 } catch (e) {
-                    c(' * [ERROR]信息内容解析失败。');
+                    c(' * [ERROR]信息内容解析失败。'.red);
                 }
                 if (info.list && info.list.length) {
                     info.list.forEach(function(item) {
@@ -61,7 +62,7 @@ function showList(config, type) {
                     });
                 }
             } else {
-                c(' * [ERROR]获取列表信息失败。');
+                c(' * [ERROR]获取列表信息失败。'.red);
             }
             cb(null);
         });
@@ -73,7 +74,7 @@ function installQAppModule(config, path, root) {
         c('- 本地更新QApp ...');
         fs.lstat(path, function(err, stat) {
             if (err) {
-                c(' * [ERROR]文件或目录不存在。');
+                c(' * [ERROR]文件或目录不存在。'.red);
                 cb(null);
             } else {
                 if (stat.isDirectory()) {
@@ -81,10 +82,10 @@ function installQAppModule(config, path, root) {
                         deleteFirst: true
                     }, function(err) {
                         if (err) {
-                            c(' * [ERROR]文件复制失败。');
+                            c(' * [ERROR]文件复制失败。'.red);
                         } else {
                             c(' * 文件复制成功。');
-                            c(' * 更新成功。');
+                            c(' * 更新成功。'.green);
                         }
                         cb(null);
                     });
@@ -96,8 +97,7 @@ function installQAppModule(config, path, root) {
                             syspath.join(root, './tmp/QApp'),
                             function(err) {
                                 if (err) {
-                                    c(' * [ERROR]: ', err);
-                                    c(' * [ERROR]解压包失败。');
+                                    c(' * [ERROR]解压包失败。'.red);
                                     cb(null);
                                 } else {
                                     c(' * 解压完毕。');
@@ -105,10 +105,10 @@ function installQAppModule(config, path, root) {
                                         deleteFirst: true
                                     }, function(err) {
                                         if (err) {
-                                            c(' * [ERROR]文件复制失败。');
+                                            c(' * [ERROR]文件复制失败。'.red);
                                         } else {
                                             c(' * 文件复制成功。');
-                                            c(' * 更新成功。');
+                                            c(' * 更新成功。'.green);
                                         }
                                         cb(null);
                                     });
@@ -116,7 +116,7 @@ function installQAppModule(config, path, root) {
                             }
                         );
                     } else {
-                        c(' * [ERROR]请选择 tar.gz 文件。');
+                        c(' * [ERROR]请选择 tar.gz 文件。'.red);
                         cb(null);
                     }
                 }
@@ -149,6 +149,7 @@ function updateQAppModule(config, version, root) {
             }
         });
         script.stdout.on('end', function(chunk) {
+            c(' * 更新/安装成功。'.green);
             cb(null);
         });
     };
@@ -174,7 +175,7 @@ function showWidgetInfo(config, name, root) {
             });
             cb(null);
         } catch(e) {
-            c(' * [ERROR]读取解析组件信息失败！');
+            c(' * [ERROR]读取解析组件信息失败！'.red);
             cb(c);
         }
     };
@@ -211,8 +212,7 @@ function installWidgets(config, widgets, root) {
                             syspath.join(root, './src/widgets/'),
                             function(err) {
                                 if (err) {
-                                    c(' * [ERROR]: ', err);
-                                    c(' * [ERROR]安装 ' + widget.name + ' 组件失败。');
+                                    c(' * [ERROR]安装 ' + widget.name + ' 组件失败。'.red);
                                 } else {
                                     if (fs.existsSync(syspath.join(root, './src/widgets/' + widget.name))) {
                                         deleteFolderRecursive(syspath.join(root, './src/widgets/' + widget.name));
@@ -226,14 +226,14 @@ function installWidgets(config, widgets, root) {
                                     rewriteConfig(config, {
                                         alias: alias
                                     }, root);
-                                    c(' * 安装 ' + widget.name + ' 组件成功。');
+                                    c(' * 安装 ' + widget.name + ' 组件成功。'.green);
                                 }
                                 callback(null);
                             }
                         );
                     } else {
                         c(' * 下载文件失败。');
-                        c(' * 安装 ' + widget.name + ' 组件失败。');
+                        c(' * 安装 ' + widget.name + ' 组件失败。'.red);
                         callback(null);
                     }
                 });
@@ -242,7 +242,7 @@ function installWidgets(config, widgets, root) {
 
         c('- 开始安装 QApp 组件: ');
         async.series(taskList, function(err, results) {
-            c(' * 全部组件安装完成！');
+            c(' * 全部组件安装完成！'.green);
             cb(null);
         });
     };
@@ -259,8 +259,8 @@ function showYoInfo(config, root) {
             c(' * 更新时间: ' + (config.update_time || '未知'));
             cb(null);
         } catch(e) {
-            c(' * [ERROR]读取解析组件信息失败！');
-            cb(c);
+            c(' * [ERROR]读取解析组件信息失败！'.red);
+            cb(null);
         }
     };
 }
@@ -283,8 +283,7 @@ function installYo(config, version, root) {
                     syspath.join(root, './tmp/yo/'),
                     function(err) {
                         if (err) {
-                            c(' * [ERROR]: ', err);
-                            c(' * [ERROR]安装 Yo 失败。');
+                            c(' * [ERROR]安装 Yo 失败。'.red);
                         } else {
                             if (!fs.existsSync(syspath.join(root, './src/yo'))) {
                                 fs.mkdirSync(syspath.join(root, './src/yo'));
@@ -315,14 +314,14 @@ function installYo(config, version, root) {
                                 }
                             }, root);
 
-                            c(' * 安装 Yo 成功。');
+                            c(' * 安装 Yo 成功。'.green);
                         }
                         cb(null);
                     }
                 );
             } else {
                 c(' * 下载文件失败。');
-                c(' * 安装 Yo 失败。');
+                c(' * 安装 Yo 失败。'.red);
                 cb(null);
             }
         });
@@ -369,7 +368,7 @@ exports.run = function(options) {
     try {
         config = JSON.parse(fs.readFileSync(syspath.join(root, 'fekit.config')));
     } catch (e) {
-        c(' * [ERROR]读取 fekit.config 失败。');
+        c(' * [ERROR]读取 fekit.config 失败。'.red);
         return;
     }
 
@@ -377,7 +376,7 @@ exports.run = function(options) {
     if (config.dependencies && config.dependencies.QApp) {
         c(' * 当前使用 QApp 版本为: ' + config.dependencies.QApp);
     } else {
-        c(' * [WARNING]没有引入 QApp 模块。');
+        c(' * [WARNING]没有引入 QApp 模块。'.yellow);
     }
 
     c('-------------------------');
@@ -419,7 +418,7 @@ exports.run = function(options) {
         } else {
             var nv = options.widget.split('@');
             if (nv.length < 2) {
-                c('- [ERROR]参数应为 name@version 形式。');
+                c('- [ERROR]参数应为 name@version 形式。'.red);
                 return;
             }
             widgets.push({
@@ -437,7 +436,7 @@ exports.run = function(options) {
         var kv = options.info.split(':');
         if (kv[0] === 'widget') {
             if (kv.length < 2) {
-                c('- [ERROR]参数应为 widget:组件名 形式。');
+                c('- [ERROR]参数应为 widget:组件名 形式。'.red);
                 return;
             }
             taskList.push(showWidgetInfo(config, kv[1], root));
@@ -455,7 +454,7 @@ exports.run = function(options) {
                 taskList.push(showYoInfo(config, root));
             }
         } else {
-            c('- [ERROR]参数应为 v@0.0.0 形式 或 info。');
+            c('- [ERROR]参数应为 v@0.0.0 形式 或 info。'.red);
         }
     }
 
@@ -466,7 +465,7 @@ exports.run = function(options) {
     async.series(taskList, function(err, results) {
         deleteFolderRecursive(syspath.join(root, './tmp'));
         c('-------------------------');
-        c('- Love & Enjoy it!');
+        c('- Love & Enjoy it!'.green);
     });
 
 };
