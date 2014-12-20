@@ -1,5 +1,6 @@
 var fs = require('fs'),
     syspath = require('path'),
+    extend = require('extend'),
     request = require('request'),
     async = require('async'),
     targz = require('tar.gz'),
@@ -9,7 +10,18 @@ var fs = require('fs'),
 
 var BASE_URL = 'http://ued.qunar.com/qapp-source/';
 
-var c = console.info;
+var isWin32 = process.platform === "win32";
+    c = console.info;
+
+function fixCmd(cmd) {
+    return isWin32 ? cmd + '.cmd' : cmd;
+}
+
+function getWidgetAliasName(name) {
+    return name.replace(/\w/, function(a) {
+        return a.toUpperCase();
+    }) + 'Widget';
+}
 
 function deleteFolderRecursive(path) {
     var files = [];
@@ -27,7 +39,13 @@ function deleteFolderRecursive(path) {
     }
 }
 
-function showList(type) {
+function rewriteConfig(config, newConfig, root) {
+    extend(true, config, newConfig);
+    console.log(config);
+    fs.writeFileSync(syspath.join(root, 'fekit.config'), JSON.stringify(config, {}, 4), 'UTF-8');
+}
+
+function showList(config, type) {
     return function(cb) {
         var url = BASE_URL + type + 's/info.config';
         c('- 获取列表 ...');
@@ -52,7 +70,7 @@ function showList(type) {
     };
 }
 
-function installQAppModule(path, root) {
+function installQAppModule(config, path, root) {
     return function(cb) {
         c('- 本地更新QApp ...');
         fs.lstat(path, function(err, stat) {
@@ -109,37 +127,51 @@ function installQAppModule(path, root) {
     };
 }
 
-function updateQAppModule(cb) {
-    var script = spawn('fekit', ['install', 'QApp']);
-    c('- Fekit 升级 QApp:');
-    script.stdout.on('data', function(chunk) {
-        var line = chunk + '';
-        line = line.replace('\n', '');
-        if (line.length) {
-            c(' * ' + line);
+function updateQAppModule(config, version, root) {
+    return function(cb) {
+        var script,
+            params = ['install', 'QApp'];
+        c('- Fekit 升级 QApp:');
+        if (version) {
+            c(' * 改写 Fekit QApp 依赖配置。');
+            rewriteConfig(config, {
+                dependencies: {
+                    QApp: version
+                }
+            }, root);
+            params.push('-c');
         }
-    });
-    script.stdout.on('end', function(chunk) {
-        cb(null);
-    });
+        c(' * 运行 Fekit Install 命令 ...');
+        script = spawn(fixCmd('fekit'), params);
+        script.stdout.on('data', function(chunk) {
+            var line = chunk + '';
+            line = line.replace('\n', '');
+            if (line.length) {
+                c(' * ' + line);
+            }
+        });
+        script.stdout.on('end', function(chunk) {
+            cb(null);
+        });
+    };
 }
 
-function showWidgetInfo(name, root) {
+function showWidgetInfo(config, name, root) {
     return function(cb) {
         c('');
         c('- 显示' + name + '组件信息 ...');
-        var config = {};
+        var widgetConfig = {};
         try {
-            config = JSON.parse(fs.readFileSync(syspath.join(root, 'src', 'widgets', name, 'widget.config')));
-            c(' * 组件组名: ' + (config.name || ''));
-            c(' * 描述: ' + (config.description || '无'));
-            c(' * 版本: ' + (config.version || '未知'));
-            c(' * 更新时间: ' + (config.update_time || '未知'));
+            widgetConfig = JSON.parse(fs.readFileSync(syspath.join(root, 'src', 'widgets', name, 'widget.config')));
+            c(' * 组件组名: ' + (widgetConfig.name || ''));
+            c(' * 描述: ' + (widgetConfig.description || '无'));
+            c(' * 版本: ' + (widgetConfig.version || '未知'));
+            c(' * 更新时间: ' + (widgetConfig.update_time || '未知'));
             c(' * 输出: ');
-            config.exports.forEach(function(item, index) {
+            widgetConfig.exports.forEach(function(item, index) {
                 c('  * -- ' + (index + 1) + ' --');
                 c('  * 名称: ' + item.name + ' \t描述名: ' + (item.description || '无') + ' \t包含组件: ' + item.widgets.join(', '));
-                c('  * 脚本: ' + (item.script || '无') + ' \t样式: ' + (item.style || '无'));
+                c('  * 脚本: ' + ((item.script && item.script.replace('./exports', getWidgetAliasName(name))) || '无') + ' \t样式: ' + ((item.style && item.style.replace('./exports', getWidgetAliasName(name))) || '无'));
                 c('  * 备注: ' + (item.mark || '无'));
             });
             cb(null);
@@ -150,7 +182,7 @@ function showWidgetInfo(name, root) {
     };
 }
 
-function installWidgets(widgets, root) {
+function installWidgets(config, widgets, root) {
 
     return function(cb) {
         var taskList = [];
@@ -174,6 +206,7 @@ function installWidgets(widgets, root) {
                 }, function(err, res, body) {
                     if (!err && res.statusCode === 200) {
                         c(' * 下载文件成功。');
+                        console.log(syspath.join(root, './tmp/' + widget.name + '-' + widget.version + '.tar.gz'));
                         fs.writeFileSync(syspath.join(root, './tmp/' + widget.name + '-' + widget.version + '.tar.gz'), body);
                         new targz().extract(
                             syspath.join(root, './tmp/' + widget.name + '-' + widget.version + '.tar.gz'),
@@ -187,6 +220,14 @@ function installWidgets(widgets, root) {
                                         deleteFolderRecursive(syspath.join(root, './src/widgets/' + widget.name));
                                     }
                                     fs.renameSync(syspath.join(root, './src/widgets/src'), syspath.join(root, './src/widgets/' + widget.name));
+
+                                    var alias = {};
+                                    alias[getWidgetAliasName(widget.name)] = 'src/widgets/' + widget.name;
+
+                                    c(' * 写入组件 Alias 路径');
+                                    rewriteConfig(config, {
+                                        alias: alias
+                                    }, root);
                                     c(' * 安装 ' + widget.name + ' 组件成功。');
                                 }
                                 callback(null);
@@ -317,13 +358,14 @@ exports.run = function(options) {
         config = JSON.parse(fs.readFileSync(syspath.join(root, 'fekit.config')));
     } catch (e) {
         c(' * [ERROR]读取 fekit.config 失败。');
+        return;
     }
 
     c('- 检测 QApp 环境:');
     if (config.dependencies && config.dependencies.QApp) {
         c(' * 当前使用 QApp 版本为: ' + config.dependencies.QApp);
     } else {
-        c(' * [ERROR]没有引入 QApp 模块。');
+        c(' * [WARNING]没有引入 QApp 模块。');
     }
 
     c('-------------------------');
@@ -334,15 +376,19 @@ exports.run = function(options) {
 
     if (options.update) {
         if (options.update !== true) {
-            taskList.push(installQAppModule(options.update, root));
+            if (options.update.indexOf('v@') === 0) {
+                taskList.push(updateQAppModule(config, options.update.substring(2), root));
+            } else {
+                taskList.push(installQAppModule(config, options.update, root));
+            }
         } else {
-            taskList.push(updateQAppModule);
+            taskList.push(updateQAppModule(config));
         }
     }
 
     if (options.list) {
         if (options.list == 'widget') {
-            taskList.push(showList('widget'));
+            taskList.push(showList(config, 'widget'));
         }
     }
 
@@ -369,9 +415,9 @@ exports.run = function(options) {
                 version: nv[1]
             });
         }
-        taskList.push(installWidgets(widgets, root));
+        taskList.push(installWidgets(config, widgets, root));
         widgets.forEach(function(widget) {
-            taskList.push(showWidgetInfo(widget.name, root));
+            taskList.push(showWidgetInfo(config, widget.name, root));
         });
     }
 

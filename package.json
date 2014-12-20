@@ -1,14 +1,15 @@
 {
     "fekit_extension_command_name":"qapp",
     "name": "fekit-extension-qapp",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "为fekit增加qapp命令",
     "dependencies": {
         "async": "0.9.0",
         "request": "2.51.0",
         "tar.gz": "0.1.0",
         "cpr": "0.3.2",
-        "mkdirp": "0.5.0"
+        "mkdirp": "0.5.0",
+        "extend": "2.0.0"
     },
     "main": "index.js",
     "scripts": {},
