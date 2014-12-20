@@ -5,7 +5,6 @@ var fs = require('fs'),
     async = require('async'),
     targz = require('tar.gz'),
     cpr = require('cpr').cpr,
-    mkdirp = require('mkdirp'),
     spawn = require('child_process').spawn;
 
 var BASE_URL = 'http://ued.qunar.com/qapp-source/';
@@ -41,7 +40,6 @@ function deleteFolderRecursive(path) {
 
 function rewriteConfig(config, newConfig, root) {
     extend(true, config, newConfig);
-    console.log(config);
     fs.writeFileSync(syspath.join(root, 'fekit.config'), JSON.stringify(config, {}, 4), 'UTF-8');
 }
 
@@ -224,7 +222,7 @@ function installWidgets(config, widgets, root) {
                                     var alias = {};
                                     alias[getWidgetAliasName(widget.name)] = 'src/widgets/' + widget.name;
 
-                                    c(' * 写入组件 Alias 路径');
+                                    c(' * 写入组件 Alias 路径 - ' + getWidgetAliasName(widget.name) + ' : src/widgets/' + widget.name);
                                     rewriteConfig(config, {
                                         alias: alias
                                     }, root);
@@ -250,7 +248,7 @@ function installWidgets(config, widgets, root) {
     };
 }
 
-function showYoInfo(root) {
+function showYoInfo(config, root) {
     return function(cb) {
         c('');
         c('- 显示 Yo 信息 ...');
@@ -267,7 +265,7 @@ function showYoInfo(root) {
     };
 }
 
-function installYo(version, root) {
+function installYo(config, version, root) {
     return function(cb) {
         c('- 开始安装 Yo: ');
         c(' * 开始下载 Yo 源码包，版本 ' + version + ' ...');
@@ -291,6 +289,12 @@ function installYo(version, root) {
                             if (!fs.existsSync(syspath.join(root, './src/yo'))) {
                                 fs.mkdirSync(syspath.join(root, './src/yo'));
                             }
+                            if (!fs.existsSync(syspath.join(root, './src/yo/usage'))) {
+                                fs.mkdirSync(syspath.join(root, './src/yo/usage'));
+                            }
+                            if (!fs.existsSync(syspath.join(root, './src/yo/usage/exports'))) {
+                                fs.mkdirSync(syspath.join(root, './src/yo/usage/exports'));
+                            }
                             if (fs.existsSync(syspath.join(root, './src/yo/yo.config'))) {
                                 fs.unlinkSync(syspath.join(root, './src/yo/yo.config'));
                             }
@@ -303,6 +307,14 @@ function installYo(version, root) {
                             fs.renameSync(syspath.join(root, './tmp/yo/src/yo.config'), syspath.join(root, './src/yo/yo.config'));
                             fs.renameSync(syspath.join(root, './tmp/yo/src/font'), syspath.join(root, './src/yo/font'));
                             fs.renameSync(syspath.join(root, './tmp/yo/src/lib'), syspath.join(root, './src/yo/lib'));
+                            c(' * 写入 Yo 输出文件 alias - Yo : src/yo/usage/exports');
+
+                            rewriteConfig(config, {
+                                alias: {
+                                    Yo: 'src/yo/usage/exports'
+                                }
+                            }, root);
+
                             c(' * 安装 Yo 成功。');
                         }
                         cb(null);
@@ -407,7 +419,7 @@ exports.run = function(options) {
         } else {
             var nv = options.widget.split('@');
             if (nv.length < 2) {
-                c(' * [ERROR]参数应为 name@version 形式。');
+                c('- [ERROR]参数应为 name@version 形式。');
                 return;
             }
             widgets.push({
@@ -425,20 +437,26 @@ exports.run = function(options) {
         var kv = options.info.split(':');
         if (kv[0] === 'widget') {
             if (kv.length < 2) {
-                c(' * [ERROR]参数应为 widget:组件名 形式。');
+                c('- [ERROR]参数应为 widget:组件名 形式。');
                 return;
             }
-            taskList.push(showWidgetInfo(kv[1], root));
+            taskList.push(showWidgetInfo(config, kv[1], root));
         } else if (kv[0] === 'yo') {
-            taskList.push(showYoInfo(root));
+            taskList.push(showYoInfo(config, root));
         }
     }
 
     if (options.yo) {
         if (options.yo !== true) {
-            taskList.push(installYo(options.yo, root));
+            if (options.yo.indexOf('v@') === 0) {
+                taskList.push(installYo(config, options.yo.substring(2), root));
+                taskList.push(showYoInfo(config, root));
+            } else if (options.yo === 'info'){
+                taskList.push(showYoInfo(config, root));
+            }
+        } else {
+            c('- [ERROR]参数应为 v@0.0.0 形式 或 info。');
         }
-        taskList.push(showYoInfo(root));
     }
 
     if (!fs.existsSync(syspath.join(root, './tmp'))) {
